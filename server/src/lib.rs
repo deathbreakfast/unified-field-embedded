@@ -207,7 +207,10 @@ use axum::middleware::from_fn;
 use axum::{BoxError, Extension, Router};
 use axum_login::AuthManagerLayerBuilder;
 use higgs::HiggsConfig;
-use lepton_host_adapter::files::{files_routes, FileByteBackend, FilesConfig, LocalDiskBlobStore};
+use lepton_host_adapter::files::{
+    blob_stores_from_env, files_routes, BlobStoreLayout, FileByteBackend, FilesConfig,
+    LocalDiskBlobStore,
+};
 use lepton_host_adapter::{session_snapshot_middleware, Backend, PhotonAuth};
 use leptos::config::get_configuration;
 use leptos::prelude::*;
@@ -227,8 +230,12 @@ use tower_sessions::session_store::ExpiredDeletion;
 use tower_sessions::{Expiry, SessionManagerLayer};
 
 mod expiring_session_store;
+#[cfg(feature = "server-embedded")]
+mod permission_manifest_sync;
 pub mod platform;
 mod request_hardening;
+#[cfg(feature = "server-embedded")]
+mod super_user_boot;
 
 #[cfg(feature = "e2e-host-conformance")]
 mod e2e_support;
@@ -478,6 +485,21 @@ async fn build_router_from_platform(
             .sync_typed_tables_from_registry()
             .await
             .map_err(|e| anyhow::anyhow!("typed table sync failed: {e}"))?;
+        // Materialize uf_app! permission manifests (PhotonAdmin, ChrononAdmin, …)
+        // so /permission and request flows have catalog rows on first boot.
+        #[cfg(feature = "server-embedded")]
+        if let Err(e) =
+            permission_manifest_sync::sync_permission_manifests_for_valence(&boot_valence).await
+        {
+            log::warn!("[server] permission manifest sync failed: {e}");
+        }
+        // Ensure Super User group; promote UF_SUPER_USER_EMAILS when users exist.
+        #[cfg(feature = "server-embedded")]
+        if let Err(e) =
+            super_user_boot::ensure_and_seed_super_users_for_valence(&boot_valence).await
+        {
+            log::warn!("[server] super user boot seed failed: {e}");
+        }
         if let Err(e) = boot_valence.ensure_ttl_for_all().await {
             log::warn!("[server] ensure_ttl_for_all failed: {e}");
         }
@@ -509,7 +531,7 @@ async fn build_router_from_platform(
         #[cfg(feature = "server-embedded")]
         {
             use valence::Model;
-            match counter_app_worker::generated::Counter::get("singleton", &boot_valence).await {
+            match counter_app_worker::generated::Counter::get("singleton", &boot_valence, valence::use_!(r#"In **server**, we **load Counter** so the application can decide what to do next in this workflow. The result is used by **server** logic and is only shown in a UI when that feature’s screens display it."#)).await {
                 Ok(None) => match counter_app_worker::service::set_global(0, &boot_valence).await {
                     Ok(_) => log::info!("[server] seeded counter singleton at 0"),
                     Err(e) => log::warn!("[server] seed counter singleton failed: {e}"),
@@ -517,16 +539,6 @@ async fn build_router_from_platform(
                 Ok(Some(_)) => {}
                 Err(e) => log::warn!("[server] counter singleton probe failed: {e}"),
             }
-        }
-
-        // Seed counter demo bots after Boson is configured so UserCounter side effects
-        // can enqueue leaderboard notification tasks (mirrors web-app-template boot).
-        #[cfg(feature = "server-embedded")]
-        if let Err(e) =
-            counter_app_worker::scripts::ensure_bot_users::ensure_bot_users_seed(&boot_valence)
-                .await
-        {
-            log::warn!("[server] ensure_bot_users_seed failed: {e}");
         }
     }
 
@@ -542,6 +554,8 @@ async fn build_router_from_platform(
         use uf_oauth_boot::resolve_oauth_config_from_neutrino;
 
         let mut builder = LeptonAuthServicesBuilder::new().public_base_url(public_base.clone());
+        // Confirm-account OTP: noop here — swap to Twilio (or other) for live delivery.
+        // See docs/auth-and-session.md § Email and SMS delivery.
         builder = builder.email(
             lepton_smtp::EmailServiceBuilder::new()
                 .noop()
@@ -682,6 +696,21 @@ async fn build_router_from_platform(
         );
     // Photon WebSocket mount (needs PHOTON_TRANSPORT_KEY + Origin allowlist).
     app = ws_router::<AppState, PhotonAuth>(app);
+
+    let file_layout: BlobStoreLayout = blob_stores_from_env().unwrap_or_else(|e| {
+        log::warn!(
+            "[server] MESON blob stores from env failed; using LocalDisk uploads/ + uploads-quarantine/: {e}"
+        );
+        BlobStoreLayout {
+            available: Arc::new(LocalDiskBlobStore::default_uploads()) as Arc<dyn FileByteBackend>,
+            quarantine: Arc::new(LocalDiskBlobStore::new("uploads-quarantine"))
+                as Arc<dyn FileByteBackend>,
+        }
+    });
+    // Dual stores + AlwaysCleanScanner are installed inside files_routes.
+    let file_store_for_ctx = Arc::clone(&file_layout.available);
+    let files_config = FilesConfig::new(default_backend_key.clone());
+
     app = app
         .leptos_routes_with_context(
             &state,
@@ -697,6 +726,7 @@ async fn build_router_from_platform(
                 provide_context(boson_backend.clone());
                 provide_context(photon.clone());
                 provide_context(spectra.clone());
+                provide_context(file_store_for_ctx.clone());
                 lepton_auth::services::provide_auth_services(auth_services_for_ctx.clone());
             },
             move || {
@@ -709,12 +739,9 @@ async fn build_router_from_platform(
             _,
         >(move || {}, app::shell));
 
-    let file_store: Arc<dyn FileByteBackend> = Arc::new(LocalDiskBlobStore::default_uploads());
-    let files_config = FilesConfig::new(default_backend_key.clone());
-
     let secure_cookies = session_cookie_secure(&public_base);
     let mut protected = app
-        .merge(files_routes(file_store, files_config))
+        .merge(files_routes(file_layout, files_config))
         // Compress `/pkg` WASM chunks and other static/SSR responses (br/gzip).
         .layer(CompressionLayer::new())
         .layer(from_fn(session_snapshot_middleware))
@@ -785,7 +812,7 @@ pub fn listen_addr() -> anyhow::Result<SocketAddr> {
 ///
 /// Resolves [`listen_addr`], builds the host via [`build_host`], binds TCP, and
 /// serves with graceful shutdown. After Axum stops, signals Chronon shutdown and
-/// aborts the run loop (same pattern as `{{crate_name}}_e2e::IsolatedLab` Drop).
+/// aborts the run loop (same pattern as `host_e2e::IsolatedLab` Drop).
 /// Call from `main` (see `server/src/main.rs`) at process startup.
 ///
 /// # Errors

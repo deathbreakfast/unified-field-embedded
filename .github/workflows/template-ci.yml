@@ -30,7 +30,7 @@ jobs:
     outputs:
       gen_root: ${{ steps.gen.outputs.gen_root }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master (pin)
         with:
           toolchain: nightly
@@ -52,7 +52,7 @@ jobs:
             (cd "$GEN_ROOT/end2end" && npm install --package-lock-only)
           fi
           tar -C "$(dirname "$GEN_ROOT")" -czf "${RUNNER_TEMP}/gen-host.tgz" "$(basename "$GEN_ROOT")"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: generated-host
           path: ${{ runner.temp }}/gen-host.tgz
@@ -62,7 +62,7 @@ jobs:
     needs: generate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: generated-host
           path: ${{ runner.temp }}
@@ -83,7 +83,7 @@ jobs:
     needs: generate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: generated-host
           path: ${{ runner.temp }}
@@ -100,7 +100,7 @@ jobs:
         working-directory: ${{ env.GEN_ROOT }}
         run: >
           cargo clippy -p photon-uf-embedded -p boson-uf-embedded
-          -p chronon-uf-embedded -p spectra-uf-embedded -p ${PROJECT_NAME}-e2e
+          -p chronon-uf-embedded -p spectra-uf-embedded -p host-e2e
           --all-targets --locked -- -D warnings
       - name: cargo clippy (server)
         working-directory: ${{ env.GEN_ROOT }}
@@ -110,7 +110,7 @@ jobs:
     needs: generate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: generated-host
           path: ${{ runner.temp }}
@@ -132,14 +132,14 @@ jobs:
           cargo test -p app --features ssr,server-embedded --test full_product_surface_hygiene --locked
       - name: Layer 2 IsolatedLab
         working-directory: ${{ env.GEN_ROOT }}
-        run: cargo test -p ${PROJECT_NAME}-e2e --locked -- --test-threads=1
+        run: cargo test -p host-e2e --locked -- --test-threads=1
 
   e2e:
     needs: generate
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: generated-host
           path: ${{ runner.temp }}
@@ -156,7 +156,7 @@ jobs:
         with:
           toolchain: nightly
           targets: wasm32-unknown-unknown
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         id: cargo-leptos-cache
         with:
           path: |
@@ -174,7 +174,7 @@ jobs:
             echo "error: end2end/package-lock.json missing from generated host" >&2
             exit 1
           fi
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: "20"
           cache: npm
@@ -186,7 +186,7 @@ jobs:
         id: pw-version
         working-directory: ${{ env.GEN_ROOT }}/end2end
         run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
@@ -199,6 +199,13 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         working-directory: ${{ env.GEN_ROOT }}/end2end
         run: npx playwright install-deps chromium
+      # end-to-end exits 0 when its build fails, so build first to fail loudly.
+      - name: cargo leptos build
+        working-directory: ${{ env.GEN_ROOT }}
+        run: >
+          cargo leptos build --project ${PROJECT_NAME} --split
+          --bin-features ssr,server-embedded,e2e-host-conformance
+          --lib-features hydrate
       - name: cargo leptos end-to-end (host conformance)
         working-directory: ${{ env.GEN_ROOT }}
         env:
@@ -211,7 +218,7 @@ jobs:
           --lib-features hydrate
       - name: Upload Playwright artifacts on failure
         if: failure() || cancelled()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: playwright-artifacts-unified-field-embedded-${{ github.run_id }}
           path: |
@@ -220,11 +227,28 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  root-deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check
+
+  root-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Security audit
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit
+
   supply-chain:
     needs: generate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: generated-host
           path: ${{ runner.temp }}

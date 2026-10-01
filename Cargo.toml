@@ -8,7 +8,7 @@ members = [
     "chronon-uf-embedded",
     "boson-uf-embedded",
     "spectra-uf-embedded",
-    "{{project-name}}-e2e",
+    "host-e2e",
 ]
 
 [workspace.package]
@@ -186,6 +186,13 @@ gauge = { git = "https://github.com/unified-field-dev/gauge", branch = "main", d
 gauge-app = { git = "https://github.com/unified-field-dev/gauge-uf-app", branch = "main", default-features = false }
 neutrino = { git = "https://github.com/unified-field-dev/neutrino", branch = "main", default-features = false }
 neutrino-app = { git = "https://github.com/unified-field-dev/neutrino-uf-app", branch = "main", default-features = false }
+meson-app = { git = "https://github.com/unified-field-dev/meson-uf-app", branch = "main", default-features = false }
+meson = { git = "https://github.com/unified-field-dev/meson", branch = "main", default-features = false, features = [
+    "db-sqlite",
+    "backend-local",
+    "scan-pipeline",
+    "scan-chronon",
+] }
 uf-oauth-boot = { git = "https://github.com/unified-field-dev/uf-oauth-boot", branch = "main" }
 record-history = { git = "https://github.com/unified-field-dev/record-history", branch = "main", default-features = false }
 record-history-leptos = { git = "https://github.com/unified-field-dev/record-history", branch = "main", default-features = false }
@@ -241,11 +248,7 @@ js-minify = false
 # Kits still declare Valence / Chronon / Orbital via crates.io. Redirect onto the
 # same uf-dev git tips as [workspace.dependencies] so types unify (and pin
 # parcel_selectors via Orbital's =0.28.2).
-[patch."https://github.com/deathbreakfast/chronon-coordinator"]
-chronon-coordinator = { git = "https://github.com/unified-field-dev/chronon-coordinator", branch = "main" }
 
-[patch."https://github.com/deathbreakfast/boson-coordinator"]
-boson-coordinator = { git = "https://github.com/unified-field-dev/boson-coordinator", branch = "main" }
 
 [patch.crates-io]
 uf-valence = { git = "https://github.com/unified-field-dev/valence", branch = "main" }
@@ -290,5 +293,8 @@ orbital-tree = { git = "https://github.com/unified-field-dev/orbital", branch = 
 orbital-scheduler = { git = "https://github.com/unified-field-dev/orbital", branch = "main" }
 orbital-motion = { git = "https://github.com/unified-field-dev/orbital", branch = "main" }
 orbital-style = { git = "https://github.com/unified-field-dev/orbital", branch = "main" }
+
+
+
 [workspace.lints.rust]
 missing_docs = "deny"

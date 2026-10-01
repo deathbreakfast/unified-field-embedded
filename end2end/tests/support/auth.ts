@@ -124,12 +124,69 @@ export async function assertAnonymousShell(page: Page): Promise<void> {
   });
 }
 
-/** Prove the menu reflects the authenticated host session. */
+/** A row of uf-help's `uf.help.tour_steps` localStorage list. */
+type HelpVisit = {
+  route: string;
+  feature_highlight: string;
+  spotlight: string | null;
+  replay: boolean;
+};
+
+const WELCOME_TOUR_STEPS = [
+  ["welcome-featured", "welcome-featured-card"],
+  ["welcome-featured-view-all", "welcome-featured-view-all"],
+  ["welcome-recent", "welcome-recent-apps-card"],
+  ["welcome-most-used", "welcome-most-used-card"],
+  ["welcome-popular", "welcome-popular-apps-card"],
+] as const;
+
+/**
+ * Mark the `/welcome` Help tour seen before any page loads.
+ *
+ * A new user's first `/welcome` visit auto-opens the uf-welcome spotlight tour
+ * once its visit list resolves. That lands after the shell is already
+ * authenticated, so it can take the avatar click and leave the user menu shut.
+ */
+export async function markWelcomeTourSeen(page: Page): Promise<void> {
+  await page.addInitScript((steps) => {
+    try {
+      const key = "uf.help.tour_steps";
+      const rows: HelpVisit[] = JSON.parse(localStorage.getItem(key) ?? "[]");
+      for (const [featureHighlight, spotlight] of steps) {
+        const seen = rows.some(
+          (r) => r.route === "/welcome" && r.feature_highlight === featureHighlight,
+        );
+        if (!seen) {
+          rows.push({
+            route: "/welcome",
+            feature_highlight: featureHighlight,
+            spotlight,
+            replay: false,
+          });
+        }
+      }
+      localStorage.setItem(key, JSON.stringify(rows));
+    } catch {
+      /* storage unavailable: the tour may show */
+    }
+  }, WELCOME_TOUR_STEPS);
+}
+
+/**
+ * Prove the menu reflects the authenticated host session.
+ *
+ * Right after sign-in the app bar can re-render as the session settles, which
+ * drops an open menu. Re-open until the profile entry shows instead of
+ * trusting the first click.
+ */
 export async function assertAuthenticatedMenu(page: Page): Promise<void> {
-  await openUserMenu(page);
-  await expect(page.getByTestId("user-menu-profile")).toBeVisible({
-    timeout: 30_000,
-  });
+  const profile = page.getByTestId("user-menu-profile");
+  await expect(async () => {
+    if (!(await profile.isVisible())) {
+      await openUserMenu(page);
+    }
+    await expect(profile).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 45_000 });
   await expect(page.getByTestId("user-menu-logout")).toBeAttached({
     timeout: 15_000,
   });

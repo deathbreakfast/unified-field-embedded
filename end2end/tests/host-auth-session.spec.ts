@@ -3,6 +3,7 @@ import {
   assertAnonymousShell,
   assertAuthenticatedMenu,
   assertAuthenticatedShell,
+  markWelcomeTourSeen,
   seedVerifiedUser,
   signIn,
   signOut,
@@ -19,6 +20,7 @@ const authenticatedRoutes = [
   ["/boson", "boson-app-root"],
   ["/permission", "permission-app-root"],
   ["/secrets", "neutrino-app-root"],
+  ["/meson", "meson-app-root"],
   ["/tag", "tag-app-root"],
 ] as const;
 
@@ -32,6 +34,7 @@ test.describe("EMBED-AUTH host session", () => {
     request,
   }) => {
     const credentials = await seedVerifiedUser(request);
+    await markWelcomeTourSeen(page);
     await signIn(page, credentials, "/welcome");
     await assertAuthenticatedMenu(page);
 
@@ -104,7 +107,11 @@ test.describe("EMBED-AUTH host session", () => {
     }
 
     await gotoHydrated(page, "/user/account-settings");
-    await expect(page).toHaveURL(/\/auth\/signin/, { timeout: 60_000 });
+    await assertAnonymousShell(page);
+    await expect(page.getByTestId("auth-required-empty-state")).toBeAttached({
+      timeout: 60_000,
+    });
+    await expect(page.getByTestId("account-settings-container")).toHaveCount(0);
   });
 
   test("E2E-SEED-01-invalid-token-contained", async ({ request }) => {
