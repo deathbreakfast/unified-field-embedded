@@ -22,7 +22,8 @@ export PHOTON_TRANSPORT_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 cargo fmt --all --check
 cargo test -p photon-uf-embedded -p boson-uf-embedded -p chronon-uf-embedded \
   -p spectra-uf-embedded
-cargo test -p server --features server-embedded --lib --test listen_addr_contract
+cargo test -p server --features server-embedded --lib --test listen_addr_contract \
+  --test data_use_catalog
 cargo test -p server --features server-embedded,e2e-host-conformance --lib e2e_support
 cargo test -p app --features ssr,server-embedded --test full_product_surface_hygiene
 cargo clippy -p photon-uf-embedded -p boson-uf-embedded -p chronon-uf-embedded \
@@ -40,6 +41,7 @@ cargo clippy -p server --features server-embedded --all-targets -- -D warnings
 | `chronon_uf_embedded::build_chronon_runtime` | unit + integ | temp SQLite + shutdown | parent-not-dir | `tests/runtime_contract.rs` |
 | `spectra_uf_embedded::install_embedded_sqlite` | unit + integ | temp metrics/events paths | parent-not-dir | `tests/runtime_contract.rs` |
 | `server::listen_addr` | unit + integ | default / valid `SITE_ADDR` | garbage env → `Err` | no bind |
+| `server::data_use_catalog` | integ | counter worker + lepton rows; repo-relative paths | second install rejected; e2e fixtures or an undeclared binary fail | `tests/data_use_catalog.rs` |
 | `e2e_support` seed token gate | unit | non-empty token | missing/empty token; non-Bearer header | feature `e2e-host-conformance` only |
 | Seed feature compiled out | unit | default `server-embedded` build | — | `e2e_host_conformance_feature_absent_by_default` |
 | Full-product surface hygiene | unit | platform apps present; no `full`/`server-full`/marketing/Coming Soon | missing platform deps | `app/tests/full_product_surface_hygiene.rs` |

@@ -74,6 +74,35 @@ Secure, and WebSocket Origin allowlist:
 - [docs/data-and-valence-bootstrap.md](docs/data-and-valence-bootstrap.md): `VALENCE_SQLITE_PATH`, `db_and_router`, `router_groups`
 - [docs/auth-and-session.md](docs/auth-and-session.md): session Secure, Origin allowlist, OAuth / Neutrino
 
+## Data uses catalog
+
+Signed-in users see every declared Valence data use this host makes on the
+`/valence` Data uses pages. `server/build.rs` builds that list by scanning the
+server's dependency graph, and `server::run` installs it before the router starts.
+
+Out of the box every component runs inside the `server` process, so the scan picks
+them all up from what the server links:
+
+| Component | How it runs | In the catalog because |
+|-----------|-------------|------------------------|
+| Counter worker, lepton auth, Gauge, Neutrino, Tag, welcome, record history, Meson | linked into `server` | normal dependency |
+| Chronon, Boson, Photon, Spectra runtimes | in-process `*-uf-embedded` builders | normal dependency |
+
+When you add a component that runs as its own binary (a Chronon worker, a Boson
+task runner, a service from another repository), declare it in `server/Cargo.toml`.
+Cargo locks and fetches it but never builds it:
+
+```toml
+# cfg(any()) is never true, so these are scanned for data uses and never compiled.
+[target.'cfg(any())'.dependencies]
+my-worker = { git = "https://github.com/acme/my-worker", branch = "main" }
+```
+
+The full rules (path and git entries, features, bin-only crates) are in the
+[deployment components guide](https://docs.rs/uf-valence-data-use-scan/latest/valence_data_use_scan/#declare-deployment-components).
+A binary added to this workspace fails `cargo test -p server --test data_use_catalog`
+until it is linked, declared, or listed in that test's `NOT_DEPLOYED` with a reason.
+
 ## Grow your app
 
 Add or trim uf-apps and place domain code beside the shell:

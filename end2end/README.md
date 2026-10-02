@@ -58,6 +58,7 @@ npx playwright test host-auth-session.spec.ts # requires UF_E2E_SEED_TOKEN
 | `photon-shell.spec.ts` | Photon nav + anonymous outlet denial |
 | `counter-click-demo.spec.ts` | Host-mounted counter increment |
 | `auth-menu-shell.spec.ts` | Anonymous app-bar sign-in controls |
+| `valence-data-uses.spec.ts` | Installed data-use catalog: counter worker rows, no e2e fixture leak, anonymous denial |
 
 The frozen route data is in `tests/support/routes.ts`.
 

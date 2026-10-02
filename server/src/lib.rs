@@ -229,6 +229,8 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use tower_sessions::session_store::ExpiredDeletion;
 use tower_sessions::{Expiry, SessionManagerLayer};
 
+#[cfg(feature = "server-embedded")]
+pub mod data_use_catalog;
 mod expiring_session_store;
 #[cfg(feature = "server-embedded")]
 mod permission_manifest_sync;
@@ -810,8 +812,8 @@ pub fn listen_addr() -> anyhow::Result<SocketAddr> {
 
 /// Run the embedded host until Ctrl-C (or equivalent), then drain Chronon.
 ///
-/// Resolves [`listen_addr`], builds the host via [`build_host`], binds TCP, and
-/// serves with graceful shutdown. After Axum stops, signals Chronon shutdown and
+/// Resolves [`listen_addr`], installs the data-use catalog (`server-embedded`), builds
+/// the host via [`build_host`], binds TCP, and serves with graceful shutdown. After Axum stops, signals Chronon shutdown and
 /// aborts the run loop (same pattern as `host_e2e::IsolatedLab` Drop).
 /// Call from `main` (see `server/src/main.rs`) at process startup.
 ///
@@ -824,6 +826,9 @@ pub fn listen_addr() -> anyhow::Result<SocketAddr> {
 /// See [Serve host](index.html#serve-host).
 pub async fn run() -> anyhow::Result<()> {
     let addr = listen_addr()?;
+    #[cfg(feature = "server-embedded")]
+    data_use_catalog::install_data_use_catalog()
+        .map_err(|e| anyhow::anyhow!("install data-use catalog: {e}"))?;
     let BuiltHost { router, chronon } = build_host().await?;
     let listener = bind_tcp(&addr).await?;
     log::info!("embedded host listening on http://{addr}");
