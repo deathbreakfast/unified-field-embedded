@@ -1,2 +1,5 @@
 [toolchain]
-channel = "nightly"
+# nightly-2026-10-01 clippy flags doc_markdown on Leptos #[component] prop docs; unpin once that is fixed.
+channel = "nightly-2026-09-30"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]
