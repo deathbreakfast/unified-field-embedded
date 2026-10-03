@@ -101,6 +101,7 @@ valence-platform = { git = "https://github.com/unified-field-dev/valence-platfor
 valence-codegen = { package = "uf-valence-codegen", git = "https://github.com/unified-field-dev/valence", branch = "main" }
 valence-macros = { package = "uf-valence-macros", git = "https://github.com/unified-field-dev/valence", branch = "main" }
 valence-telemetry = { package = "uf-valence-telemetry", git = "https://github.com/unified-field-dev/valence", branch = "main" }
+valence-data-use-scan = { package = "uf-valence-data-use-scan", git = "https://github.com/unified-field-dev/valence", branch = "main" }
 higgs = { git = "https://github.com/unified-field-dev/higgs", branch = "main", default-features = false }
 higgs-host = { git = "https://github.com/unified-field-dev/higgs", branch = "main", default-features = false }
 higgs-identity = { git = "https://github.com/unified-field-dev/higgs", branch = "main" }

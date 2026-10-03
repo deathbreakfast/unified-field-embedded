@@ -60,7 +60,7 @@ jobs:
         run: |
           cargo test -p photon-uf-embedded --locked -- --test-threads=1
           cargo test -p boson-uf-embedded -p chronon-uf-embedded -p spectra-uf-embedded --locked
-          cargo test -p server --features server-embedded --lib --test listen_addr_contract --locked
+          cargo test -p server --features server-embedded --lib --test listen_addr_contract --test data_use_catalog --locked
           cargo test -p server --features server-embedded,e2e-host-conformance --lib e2e_support --locked
           cargo test -p app --features ssr,server-embedded --test full_product_surface_hygiene --locked
       - name: Layer 2 IsolatedLab

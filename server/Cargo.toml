@@ -58,6 +58,9 @@ uf-product = { workspace = true, default-features = false, optional = true }
 valence = { workspace = true, default-features = false, optional = true }
 valence-platform = { workspace = true, optional = true }
 
+[build-dependencies]
+valence-data-use-scan.workspace = true
+
 [features]
 default = ["server-embedded"]
 ssr = []
