@@ -350,7 +350,10 @@ fn log_panic_response(err: Box<dyn std::any::Any + Send + 'static>) -> axum::res
         "unknown panic payload".to_string()
     };
     log::error!("[server] request handler panicked: {details}");
-    (StatusCode::INTERNAL_SERVER_ERROR, details).into_response()
+    // Log the panic message above; never put it in the response body — a
+    // caught panic can carry internal state the client has no business
+    // seeing (and server_fn's client only needs a non-empty, decodable body).
+    (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
 }
 
 /// Build the Photon WebSocket `Origin` allowlist for [`HasPhoton`].
